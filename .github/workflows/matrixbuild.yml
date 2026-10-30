@@ -489,7 +489,11 @@ jobs:
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> arch/arm64/configs/gki_defconfig
           echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/gki_defconfig
           echo "CONFIG_NET_SCH_CAKE=y" >> arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEFAULT_BBR=y" >> arch/arm64/configs/gki_defconfig
+          if [[ "${{ inputs.perf_patches }}" == "true" ]]; then
+            echo "CONFIG_DEFAULT_BBR3=y" >> arch/arm64/configs/gki_defconfig
+          else
+            echo "CONFIG_DEFAULT_BBR=y" >> arch/arm64/configs/gki_defconfig
+          fi
 
           if [[ "${{ inputs.fast_alloc }}" == "true" ]]; then
             echo "# CONFIG_INIT_ON_ALLOC_DEFAULT_ON is not set" >> arch/arm64/configs/gki_defconfig
@@ -596,7 +600,7 @@ jobs:
             | KernelSU 方案 |      KernelSU-Next, BakaSU       |
             | ZRAM 算法 |      ${{ inputs.lz4kd && 'LZ4KD（默认）' || '原厂' }}       |
             | 性能补丁 |      ${{ inputs.perf_patches && 'BBRv3 / atomics / qspinlock / binder / PM / mm' || '未启用' }}       |
-            | 默认 TCP 拥塞控制 |      BBR（CAKE 可用）       |
+            | 默认 TCP 拥塞控制 |      ${{ inputs.perf_patches && 'BBR3（默认）' || 'BBR' }}（CAKE 可用）       |
             |   Build时间   |       ${{ env.TIME_FORM }}        |
 
             **Manager downloads:**

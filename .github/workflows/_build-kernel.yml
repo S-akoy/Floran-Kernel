@@ -542,8 +542,13 @@ jobs:
             echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/gki_defconfig
             echo "CONFIG_NET_SCH_FQ=y" >> arch/arm64/configs/gki_defconfig
             echo "CONFIG_NET_SCH_CAKE=y" >> arch/arm64/configs/gki_defconfig
-            # 设为默认拥塞控制算法（字符串 CONFIG_DEFAULT_TCP_CONG 在 kconfig 中不可见，写了会被忽略）
-            echo "CONFIG_DEFAULT_BBR=y" >> arch/arm64/configs/gki_defconfig
+            # 设为默认拥塞控制算法：启用性能补丁时用 BBRv3，否则退回 BBR v1
+            # （字符串 CONFIG_DEFAULT_TCP_CONG 在 kconfig 中不可见，写了会被忽略，必须选 choice 成员）
+            if [[ "${{ inputs.perf_patches }}" == "true" ]]; then
+              echo "CONFIG_DEFAULT_BBR3=y" >> arch/arm64/configs/gki_defconfig
+            else
+              echo "CONFIG_DEFAULT_BBR=y" >> arch/arm64/configs/gki_defconfig
+            fi
             echo "CONFIG_TCP_CONG_BIC=n" >> arch/arm64/configs/gki_defconfig
             echo "CONFIG_TCP_CONG_WESTWOOD=n" >> arch/arm64/configs/gki_defconfig
             echo "CONFIG_TCP_CONG_HTCP=n" >> arch/arm64/configs/gki_defconfig
@@ -748,6 +753,7 @@ jobs:
             | LZ4KD zram | ${{ inputs.lz4kd }} |
             | Perf patches | ${{ inputs.perf_patches }} |
             | Fast alloc (INIT_ON_ALLOC off) | ${{ inputs.fast_alloc }} |
+            | Default TCP CC | ${{ inputs.perf_patches && 'BBR3' || 'BBR' }} (+ CAKE) |
             | Built at | ${{ env.TIME_FORM }} |
 
             **Manager downloads:**
