@@ -198,9 +198,9 @@ jobs:
           test -f lib/lz4kd/lz4kd_decode.c
           test -f include/linux/lz4kd.h
           test -f crypto/lz4kd.c
-          grep -q 'CONFIG_CRYPTO_LZ4KD' crypto/Kconfig
+          grep -q 'config CRYPTO_LZ4KD' crypto/Kconfig
           grep -q 'CONFIG_CRYPTO_LZ4KD' crypto/Makefile
-          grep -q 'CONFIG_LZ4KD_COMPRESS' lib/Kconfig
+          grep -q 'config LZ4KD_COMPRESS' lib/Kconfig
           grep -q 'CRYPTO_LZ4KD' drivers/block/zram/Kconfig
           grep -q 'lz4kd' drivers/block/zram/zcomp.c
 
