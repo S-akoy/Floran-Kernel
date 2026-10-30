@@ -1,0 +1,28 @@
+From 29e6334d43b5141d8937e439381600b57fce82cb Mon Sep 17 00:00:00 2001
+From: Sultan Alsawaf <sultan@kerneltoast.com>
+Date: Sat, 24 Oct 2020 22:17:49 -0700
+Subject: [PATCH] mm: Disable proactive compaction by default
+
+On-demand compaction works fine assuming that you don't have a need to
+spam the page allocator nonstop for large order page allocations.
+
+Signed-off-by: Sultan Alsawaf <sultan@kerneltoast.com>
+
+(cherry picked from commit af511c2d63642a3929269c6cac2b1504ff72f305)
+---
+ mm/compaction.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mm/compaction.c b/mm/compaction.c
+index 49f1d2a185703..6df687a3f14e6 100644
+--- a/mm/compaction.c
++++ b/mm/compaction.c
+@@ -2798,7 +2798,7 @@ static void compact_nodes(void)
+  * aggressively the kernel should compact memory in the
+  * background. It takes values in the range [0, 100].
+  */
+-unsigned int __read_mostly sysctl_compaction_proactiveness = 20;
++unsigned int __read_mostly sysctl_compaction_proactiveness;
+ 
+ int compaction_proactiveness_sysctl_handler(struct ctl_table *table, int write,
+ 		void *buffer, size_t *length, loff_t *ppos)

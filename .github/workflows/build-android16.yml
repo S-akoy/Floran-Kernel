@@ -38,6 +38,18 @@ on:
         type: boolean
         default: true
 
+      perf_patches:
+        description: "Apply curated performance patches (BBRv3, atomics, qspinlock, binder, PM, mm)"
+        required: true
+        type: boolean
+        default: true
+
+      fast_alloc:
+        description: "Disable INIT_ON_ALLOC heap zeroing (faster allocations, weaker hardening)"
+        required: true
+        type: boolean
+        default: true
+
       netfilter:
         description: "Enable IPSET & IPv6_NAT"
         required: true
@@ -91,6 +103,8 @@ jobs:
       ksu_type: ${{ inputs.ksu_type }}
       lz4_enable: ${{ inputs.lz4_enable }}
       lz4kd: ${{ inputs.lz4kd }}
+      perf_patches: ${{ inputs.perf_patches }}
+      fast_alloc: ${{ inputs.fast_alloc }}
       netfilter: ${{ inputs.netfilter }}
       ccm: ${{ inputs.ccm }}
       droidspaces: ${{ inputs.droidspaces }}

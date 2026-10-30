@@ -1,0 +1,25 @@
+From 344cdd29f382112536f38914d007b0a9ff8038dd Mon Sep 17 00:00:00 2001
+From: Kairui Song <ryncsn@gmail.com>
+Date: Tue, 22 Apr 2025 15:31:56 +0000
+Subject: [PATCH] mm/filemap: use xas_get_order more
+
+Change-Id: Icfceb782bc73818bf8405bf48916f65ccba00ad3
+
+(cherry picked from commit e7a6116210c3061010bdfe011cc92a56c24ad4ef)
+---
+ mm/filemap.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mm/filemap.c b/mm/filemap.c
+index 8e09c0ef1ae44..00cab5b2ad69b 100644
+--- a/mm/filemap.c
++++ b/mm/filemap.c
+@@ -3010,7 +3010,7 @@ static inline loff_t folio_seek_hole_data(struct xa_state *xas,
+ static inline size_t seek_folio_size(struct xa_state *xas, struct folio *folio)
+ {
+ 	if (xa_is_value(folio))
+-		return PAGE_SIZE << xa_get_order(xas->xa, xas->xa_index);
++	    return PAGE_SIZE << xas_get_order(xas);
+ 	return folio_size(folio);
+ }
+ 

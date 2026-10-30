@@ -38,6 +38,18 @@ on:
         type: boolean
         default: true
 
+      perf_patches:
+        description: "Apply curated performance patches (BBRv3, atomics, qspinlock, binder, PM, mm)"
+        required: true
+        type: boolean
+        default: true
+
+      fast_alloc:
+        description: "Disable INIT_ON_ALLOC heap zeroing (faster allocations, weaker hardening)"
+        required: true
+        type: boolean
+        default: true
+
       droidspaces:
         description: "Droidspaces Container Support"
         required: true
@@ -91,8 +103,10 @@ jobs:
       ksu_type: ${{ inputs.ksu_type }}
       lz4_enable: ${{ inputs.rom_source != 'YAAP' && inputs.rom_source != 'FrierenKernel' && inputs.lz4_enable }}
       lz4kd: ${{ inputs.lz4kd }}
+      perf_patches: ${{ inputs.perf_patches }}
+      fast_alloc: ${{ inputs.fast_alloc }}
       netfilter: ${{ inputs.rom_source != 'FrierenKernel' && inputs.netfilter }}
-      ccm: ${{ inputs.rom_source != 'FrierenKernel' && inputs.ccm }}
+      ccm: ${{ inputs.ccm }}
       droidspaces: ${{ inputs.rom_source != 'YAAP' && inputs.droidspaces || 'none' }}
       docker: ${{ inputs.docker }}
       kernel_name: ${{ inputs.kernel_name }}

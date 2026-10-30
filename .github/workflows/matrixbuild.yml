@@ -13,6 +13,16 @@ on:
         required: true
         type: boolean
         default: true
+      perf_patches:
+        description: "Apply curated performance patches (BBRv3, atomics, qspinlock, binder, PM, mm)"
+        required: true
+        type: boolean
+        default: true
+      fast_alloc:
+        description: "Disable INIT_ON_ALLOC heap zeroing (faster allocations, weaker hardening)"
+        required: true
+        type: boolean
+        default: true
       droidspaces:
         description: "Droidspaces Container Support"
         required: true
@@ -137,6 +147,51 @@ jobs:
           # 打开配置：编译进内核，并把 lz4kd 设为 zram 默认压缩算法
           echo "CONFIG_CRYPTO_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
           echo "CONFIG_ZRAM_DEF_COMP_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
+
+      - name: Apply performance patches
+        if: inputs.perf_patches
+        run: |
+          cd sm8650
+          shopt -s nullglob
+          patch_dir=../patch/perf
+          applied=0
+          skipped=0
+
+          for patch_file in "$patch_dir"/*.patch; do
+            name=$(basename "$patch_file")
+
+            # FrierenKernel 已自带 alarmtimer 改动，但实现略有差异，反向检测识别不到。
+            if [[ "${{ matrix.rom_source }}" == "FrierenKernel" && "$name" == *alarmtimer* ]]; then
+              echo ">>> $name: FrierenKernel 已自带，跳过"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            # 该源码树已经包含此补丁（如 FrierenKernel 自带）时跳过。
+            if patch --batch --forward -p1 -F 0 --dry-run --reverse < "$patch_file" >/dev/null 2>&1; then
+              echo ">>> $name: 已存在，跳过"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            if git apply --check -p1 < "$patch_file" 2>/dev/null; then
+              git apply -p1 < "$patch_file"
+              echo ">>> $name: git apply 成功"
+            elif patch --batch --forward -p1 -F 3 --dry-run < "$patch_file" >/dev/null 2>&1; then
+              patch --batch --forward -p1 -F 3 < "$patch_file"
+              echo ">>> $name: patch -F 3 成功"
+            else
+              echo "!!! $name: 无法应用到 ${{ matrix.rom_source }} 源码树" >&2
+              exit 1
+            fi
+            applied=$((applied + 1))
+          done
+
+          echo "Performance patches: applied=${applied} skipped=${skipped}"
+          if [[ $((applied + skipped)) -eq 0 ]]; then
+            echo "No performance patches were found in ${patch_dir}." >&2
+            exit 1
+          fi
 
       - name: Apply Droidspaces patches
         if: inputs.droidspaces != 'none' && matrix.rom_source != 'YAAP-17'
@@ -429,6 +484,17 @@ jobs:
             git apply ../patch/ipv6fix.patch
           fi
 
+          # BBR 设为默认拥塞控制算法，并启用 CAKE 队列调度
+          # （字符串 CONFIG_DEFAULT_TCP_CONG 在 kconfig 中不可见，写了会被忽略，必须选 choice 成员）
+          echo "CONFIG_TCP_CONG_ADVANCED=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_TCP_CONG_BBR=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_NET_SCH_CAKE=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEFAULT_BBR=y" >> arch/arm64/configs/gki_defconfig
+
+          if [[ "${{ inputs.fast_alloc }}" == "true" ]]; then
+            echo "# CONFIG_INIT_ON_ALLOC_DEFAULT_ON is not set" >> arch/arm64/configs/gki_defconfig
+          fi
+
           CUSTOM_NAME="-FloranKernel-OSS"
           echo "CONFIG_LOCALVERSION=\"${CUSTOM_NAME}\"" >> arch/arm64/configs/gki_defconfig
           echo "Kernel name set to: ${CUSTOM_NAME}"
@@ -458,6 +524,10 @@ jobs:
 
           if [[ "${{ inputs.lz4kd }}" == "true" ]]; then
             ZIP_PREFIX="${ZIP_PREFIX}-lz4kd"
+          fi
+
+          if [[ "${{ inputs.perf_patches }}" == "true" ]]; then
+            ZIP_PREFIX="${ZIP_PREFIX}-perf"
           fi
           
           ZIP_NAME="${{ matrix.rom_source }}-${ZIP_PREFIX}-Floran-$(date -u +"%m%d")"
@@ -525,6 +595,8 @@ jobs:
             | Clang | Android 17: [clang-r596125](https://github.com/AkiHaza/Floran-Kernel/releases/download/toolchain-r596125/linux-x86-refs_heads_android17-release-clang-r596125.tar.gz); Android 16: [clang-r563880c](https://github.com/AkiHaza/Floran-Kernel/releases/download/toolchain-r563880c/linux-x86-refs_heads_android16-qpr2-release-clang-r563880c.tar.gz) |
             | KernelSU 方案 |      KernelSU-Next, BakaSU       |
             | ZRAM 算法 |      ${{ inputs.lz4kd && 'LZ4KD（默认）' || '原厂' }}       |
+            | 性能补丁 |      ${{ inputs.perf_patches && 'BBRv3 / atomics / qspinlock / binder / PM / mm' || '未启用' }}       |
+            | 默认 TCP 拥塞控制 |      BBR（CAKE 可用）       |
             |   Build时间   |       ${{ env.TIME_FORM }}        |
 
             **Manager downloads:**

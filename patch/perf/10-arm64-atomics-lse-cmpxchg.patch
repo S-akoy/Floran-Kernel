@@ -1,0 +1,123 @@
+From 0836b9b3bfd4473b22b69ecf96f7cef19e5d85e7 Mon Sep 17 00:00:00 2001
+From: Mark Rutland <mark.rutland@arm.com>
+Date: Tue, 14 Mar 2023 15:36:57 +0000
+Subject: [PATCH] arm64: atomics: lse: improve cmpxchg implementation
+
+For historical reasons, the LSE implementation of cmpxchg*() hard-codes
+the GPRs to use, and shuffles registers around with MOVs. This is no
+longer necessary, and can be simplified.
+
+When the LSE cmpxchg implementation was added in commit:
+
+  c342f78217e822d2 ("arm64: cmpxchg: patch in lse instructions when supported by the CPU")
+
+... the LL/SC implementation of cmpxchg() would be placed out-of-line,
+and the in-line assembly for cmpxchg would default to:
+
+	NOP
+	BL	<ll_sc_cmpxchg*_implementation>
+	NOP
+
+The LL/SC implementation of each cmpxchg() function accepted arguments
+as per AAPCS64 rules, to it was necessary to place the pointer in x0,
+the older value in X1, and the new value in x2, and acquire the return
+value from x0. The LL/SC implementation required a temporary register
+(e.g. for the STXR status value). As the LL/SC implementation preserved
+the old value, the LSE implementation does likewise.
+
+Since commit:
+
+  addfc38672c73efd ("arm64: atomics: avoid out-of-line ll/sc atomics")
+
+... the LSE and LL/SC implementations of cmpxchg are inlined as separate
+asm blocks, with another branch choosing between thw two. Due to this,
+it is no longer necessary for the LSE implementation to match the
+register constraints of the LL/SC implementation. This was partially
+dealt with by removing the hard-coded use of x30 in commit:
+
+  3337cb5aea594e40 ("arm64: avoid using hard-coded registers for LSE atomics")
+
+... but we didn't clean up the hard-coding of x0, x1, and x2.
+
+This patch simplifies the LSE implementation of cmpxchg, removing the
+register shuffling and directly clobbering the 'old' argument. This
+gives the compiler greater freedom for register allocation, and avoids
+redundant work.
+
+The new constraints permit 'old' (Rs) and 'new' (Rt) to be allocated to
+the same register when the initial values of the two are the same, e.g.
+resulting in:
+
+	CAS	X0, X0, [X1]
+
+This is safe as Rs is only written back after the initial values of Rs
+and Rt are consumed, and there are no UNPREDICTABLE behaviours to avoid
+when Rs == Rt.
+
+The new constraints also permit 'new' to be allocated to the zero
+register, avoiding a MOV in a few cases. The same cannot be done for
+'old' as it is both an input and output, and any caller of cmpxchg()
+should care about the output value. Note that for CAS* the use of the
+zero register never affects the ordering (while for SWP* the use of the
+zero regsiter for the 'old' value drops any ACQUIRE semantic).
+
+Compared to v6.2-rc4, a defconfig vmlinux is ~116KiB smaller, though the
+resulting Image is the same size due to internal alignment and padding:
+
+  [mark@lakrids:~/src/linux]% ls -al vmlinux-*
+  -rwxr-xr-x 1 mark mark 137269304 Jan 16 11:59 vmlinux-after
+  -rwxr-xr-x 1 mark mark 137387936 Jan 16 10:54 vmlinux-before
+  [mark@lakrids:~/src/linux]% ls -al Image-*
+  -rw-r--r-- 1 mark mark 38711808 Jan 16 11:59 Image-after
+  -rw-r--r-- 1 mark mark 38711808 Jan 16 10:54 Image-before
+
+This patch does not touch cmpxchg_double*() as that requires contiguous
+register pairs, and separate patches will replace it with cmpxchg128*().
+
+There should be no functional change as a result of this patch.
+
+Signed-off-by: Mark Rutland <mark.rutland@arm.com>
+Cc: Catalin Marinas <catalin.marinas@arm.com>
+Cc: Peter Zijlstra <peterz@infradead.org>
+Cc: Robin Murphy <robin.murphy@arm.com>
+Cc: Will Deacon <will@kernel.org>
+Link: https://lore.kernel.org/r/20230314153700.787701-2-mark.rutland@arm.com
+Signed-off-by: Will Deacon <will@kernel.org>
+
+(cherry picked from commit d4c150077774856a774e30a34d72501bf2b79ab5)
+---
+ arch/arm64/include/asm/atomic_lse.h | 17 +++++------------
+ 1 file changed, 5 insertions(+), 12 deletions(-)
+
+diff --git a/arch/arm64/include/asm/atomic_lse.h b/arch/arm64/include/asm/atomic_lse.h
+index a94d6dacc0292..319958b95cfd8 100644
+--- a/arch/arm64/include/asm/atomic_lse.h
++++ b/arch/arm64/include/asm/atomic_lse.h
+@@ -251,22 +251,15 @@ __lse__cmpxchg_case_##name##sz(volatile void *ptr,			\
+ 					      u##sz old,		\
+ 					      u##sz new)		\
+ {									\
+-	register unsigned long x0 asm ("x0") = (unsigned long)ptr;	\
+-	register u##sz x1 asm ("x1") = old;				\
+-	register u##sz x2 asm ("x2") = new;				\
+-	unsigned long tmp;						\
+-									\
+ 	asm volatile(							\
+ 	__LSE_PREAMBLE							\
+-	"	mov	%" #w "[tmp], %" #w "[old]\n"			\
+-	"	cas" #mb #sfx "\t%" #w "[tmp], %" #w "[new], %[v]\n"	\
+-	"	mov	%" #w "[ret], %" #w "[tmp]"			\
+-	: [ret] "+r" (x0), [v] "+Q" (*(u##sz *)ptr),			\
+-	  [tmp] "=&r" (tmp)						\
+-	: [old] "r" (x1), [new] "r" (x2)				\
++	"	cas" #mb #sfx "	%" #w "[old], %" #w "[new], %[v]\n"	\
++	: [v] "+Q" (*(u##sz *)ptr),					\
++	  [old] "+r" (old)						\
++	: [new] "rZ" (new)						\
+ 	: cl);								\
+ 									\
+-	return x0;							\
++	return old;							\
+ }
+ 
+ __CMPXCHG_CASE(w, b,     ,  8,   )

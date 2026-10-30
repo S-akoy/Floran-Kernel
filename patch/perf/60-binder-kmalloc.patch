@@ -1,0 +1,36 @@
+From d8345c0a37209b33bdb9278a48df53d116eca557 Mon Sep 17 00:00:00 2001
+From: Juhyung Park <qkrwngud825@gmail.com>
+Date: Fri, 12 Jan 2024 03:45:35 +0900
+Subject: [PATCH] binder: avoid using kzalloc() whenever possible
+
+Those are initialized fully right below, use kmalloc().
+
+Signed-off-by: Juhyung Park <qkrwngud825@gmail.com>
+
+(cherry picked from commit 6d89b96c80bff6d78aacddd9778ecfa6d41c0149)
+---
+ drivers/android/binder.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/android/binder.c b/drivers/android/binder.c
+index 1c0e695a54c53..f2cd45bb0566c 100644
+--- a/drivers/android/binder.c
++++ b/drivers/android/binder.c
+@@ -2772,7 +2772,7 @@ static void binder_cleanup_deferred_txn_lists(struct list_head *sgc_head,
+ static int binder_defer_copy(struct list_head *sgc_head, binder_size_t offset,
+ 			     const void __user *sender_uaddr, size_t length)
+ {
+-	struct binder_sg_copy *bc = kzalloc(sizeof(*bc), GFP_KERNEL);
++	struct binder_sg_copy *bc = kmalloc(sizeof(*bc), GFP_KERNEL);
+ 
+ 	if (!bc)
+ 		return -ENOMEM;
+@@ -2815,7 +2815,7 @@ static int binder_defer_copy(struct list_head *sgc_head, binder_size_t offset,
+ static int binder_add_fixup(struct list_head *pf_head, binder_size_t offset,
+ 			    binder_uintptr_t fixup, size_t skip_size)
+ {
+-	struct binder_ptr_fixup *pf = kzalloc(sizeof(*pf), GFP_KERNEL);
++	struct binder_ptr_fixup *pf = kmalloc(sizeof(*pf), GFP_KERNEL);
+ 	struct binder_ptr_fixup *tmppf;
+ 
+ 	if (!pf)

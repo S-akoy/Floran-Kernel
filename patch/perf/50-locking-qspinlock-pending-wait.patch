@@ -1,0 +1,50 @@
+From 366afb01aa63076c6625c62b425f85cec341aa15 Mon Sep 17 00:00:00 2001
+From: Guo Ren <guoren@linux.alibaba.com>
+Date: Wed, 4 Jan 2023 21:19:52 -0500
+Subject: [PATCH] locking/qspinlock: Micro-optimize pending state waiting for
+ unlock
+
+When we're pending, we only care about lock value. The xchg_tail
+wouldn't affect the pending state. That means the hardware thread
+could stay in a sleep state and leaves the rest execution units'
+resources of pipeline to other hardware threads. This situation is
+the SMT scenarios in the same core. Not an entering low-power state
+situation. Of course, the granularity between cores is "cacheline",
+but the granularity between SMT hw threads of the same core could
+be "byte" which internal LSU handles. For example, when a hw-thread
+yields the resources of the core to other hw-threads, this patch
+could help the hw-thread stay in the sleep state and prevent it
+from being woken up by other hw-threads xchg_tail.
+
+Change-Id: I996d2f64df75724ca3c859e797e04ea1bdd13901
+Acked-by: Waiman Long <longman@redhat.com>
+Link: https://lore.kernel.org/r/20230105021952.3090070-1-guoren@kernel.org
+Cc: Peter Zijlstra <peterz@infradead.org>
+
+(cherry picked from commit dcb35399a889e9b642b56d476a44ad5aca9c9d9d)
+---
+ kernel/locking/qspinlock.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/locking/qspinlock.c b/kernel/locking/qspinlock.c
+index 2b23378775fee..ebe6b8ec7cb38 100644
+--- a/kernel/locking/qspinlock.c
++++ b/kernel/locking/qspinlock.c
+@@ -371,7 +371,7 @@ void __lockfunc queued_spin_lock_slowpath(struct qspinlock *lock, u32 val)
+ 	/*
+ 	 * We're pending, wait for the owner to go away.
+ 	 *
+-	 * 0,1,1 -> 0,1,0
++	 * 0,1,1 -> *,1,0
+ 	 *
+ 	 * this wait loop must be a load-acquire such that we match the
+ 	 * store-release that clears the locked bit and create lock
+@@ -380,7 +380,7 @@ void __lockfunc queued_spin_lock_slowpath(struct qspinlock *lock, u32 val)
+ 	 * barriers.
+ 	 */
+ 	if (val & _Q_LOCKED_MASK)
+-		atomic_cond_read_acquire(&lock->val, !(VAL & _Q_LOCKED_MASK));
++		smp_cond_load_acquire(&lock->locked, !VAL);
+ 
+ 	/*
+ 	 * take ownership and clear the pending bit.

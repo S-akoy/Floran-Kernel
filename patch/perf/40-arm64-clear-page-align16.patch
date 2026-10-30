@@ -1,0 +1,30 @@
+From e17149e95889abd4aa6b76f450bcc31bce20ee7e Mon Sep 17 00:00:00 2001
+From: Sultan Alsawaf <sultan@kerneltoast.com>
+Date: Thu, 25 May 2023 21:17:48 -0700
+Subject: [PATCH] arm64: Align clear_page() to 16 bytes
+
+Align the clear_page entry to 16 bytes for the page-zeroing path.
+
+Adapt the original change to SYM_FUNC_START(__pi_clear_page) in this
+Linux 6.1 tree. Keep its BTI landing pad, clear_page alias and export.
+The alignment changes code placement only; it does not alter the
+DC-ZVA or fallback clearing operations.
+
+Upstream-commit: 059262d116257e11fe35393d5655412df1131a76
+Signed-off-by: Sultan Alsawaf <sultan@kerneltoast.com>
+---
+ arch/arm64/lib/clear_page.S | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm64/lib/clear_page.S b/arch/arm64/lib/clear_page.S
+index ebde40e7fa2b2..cfbbdead527ad 100644
+--- a/arch/arm64/lib/clear_page.S
++++ b/arch/arm64/lib/clear_page.S
+@@ -14,6 +14,7 @@
+  * Parameters:
+  *	x0 - dest
+  */
++	.p2align 4
+ SYM_FUNC_START(__pi_clear_page)
+ 	mrs	x1, dczid_el0
+ 	tbnz	x1, #4, 2f	/* Branch if DC ZVA is prohibited */
