@@ -32,6 +32,12 @@ on:
         type: boolean
         default: true
 
+      lz4kd:
+        description: "Enable LZ4KD zram compressor (default zram algorithm = lz4kd)"
+        required: true
+        type: boolean
+        default: true
+
       netfilter:
         description: "Enable IPSET & IPv6_NAT"
         required: true
@@ -84,6 +90,7 @@ jobs:
       rom_source: ${{ inputs.rom_source }}
       ksu_type: ${{ inputs.ksu_type }}
       lz4_enable: ${{ inputs.lz4_enable }}
+      lz4kd: ${{ inputs.lz4kd }}
       netfilter: ${{ inputs.netfilter }}
       ccm: ${{ inputs.ccm }}
       droidspaces: ${{ inputs.droidspaces }}

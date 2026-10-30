@@ -23,6 +23,12 @@ on:
         required: true
         type: boolean
 
+      lz4kd:
+        description: "Enable LZ4KD zram compressor (Huawei LZ4KD, becomes the default zram algorithm)"
+        required: false
+        type: boolean
+        default: true
+
       netfilter:
         description: "Enable IPSET & IPv6_NAT"
         required: true
@@ -159,6 +165,36 @@ jobs:
             mkdir -p lib/lz4/lz4armv8
             cp ../patch/lz4opt.S lib/lz4/lz4armv8/lz4armv8.S
           fi
+
+      - name: Apply LZ4KD zram patch
+        if: inputs.lz4kd
+        run: |
+          cd sm8650
+          echo ">>> 正在添加 LZ4KD zram 压缩算法..."
+          patch_file=../patch/lz4kd.patch
+
+          if git apply --check -p1 < "$patch_file" 2>/dev/null; then
+            git apply -p1 < "$patch_file"
+            echo "LZ4KD patch applied cleanly to ${{ inputs.rom_source }}."
+          else
+            echo "git apply 未命中，回退到 patch -F 3（允许上下文 fuzz）..."
+            patch --batch --forward -p1 -F 3 < "$patch_file"
+          fi
+
+          # 完整性校验：任何一个钩子缺失都直接失败，避免静默产出没有 lz4kd 的内核
+          test -f lib/lz4kd/lz4kd_encode.c
+          test -f lib/lz4kd/lz4kd_decode.c
+          test -f include/linux/lz4kd.h
+          test -f crypto/lz4kd.c
+          grep -q 'CONFIG_CRYPTO_LZ4KD' crypto/Kconfig
+          grep -q 'CONFIG_CRYPTO_LZ4KD' crypto/Makefile
+          grep -q 'CONFIG_LZ4KD_COMPRESS' lib/Kconfig
+          grep -q 'CRYPTO_LZ4KD' drivers/block/zram/Kconfig
+          grep -q 'lz4kd' drivers/block/zram/zcomp.c
+
+          # 打开配置：编译进内核，并把 lz4kd 设为 zram 默认压缩算法
+          echo "CONFIG_CRYPTO_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_ZRAM_DEF_COMP_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
 
       - name: Apply Droidspaces patches
         if: inputs.droidspaces != 'none' && inputs.rom_source != 'YAAP'
@@ -542,6 +578,11 @@ jobs:
             ZIP_PREFIX="${ZIP_PREFIX}-docker"
           fi
 
+          # 添加 LZ4KD 标记
+          if [[ "${{ inputs.lz4kd }}" == "true" ]]; then
+            ZIP_PREFIX="${ZIP_PREFIX}-lz4kd"
+          fi
+
           ZIP_NAME="${{ inputs.rom_source }}-A${{ inputs.android_version }}-${ZIP_PREFIX}-$(date -u +"%m%d")"
           git clone --depth=1 https://github.com/AkiHaza/AnyKernel3.git
           cp sm8650/out/arch/arm64/boot/Image AnyKernel3/Image
@@ -609,6 +650,11 @@ jobs:
             KSU_TYPENAME="${KSU_TYPENAME} + Droidspaces Extended"
           fi
 
+          # 添加 LZ4KD 信息
+          if [[ "${{ inputs.lz4kd }}" == "true" ]]; then
+            KSU_TYPENAME="${KSU_TYPENAME} + LZ4KD zram"
+          fi
+
           echo "KSU_TYPENAME=${KSU_TYPENAME}" >> $GITHUB_ENV
 
           SOURCE="${{ inputs.rom_source }}"
@@ -629,6 +675,7 @@ jobs:
             | Clang | [${{ env.CLANG_VERSION }}](${{ env.CLANG_URL }}) |
             | KernelSU | ${{ env.KSU_TYPENAME }} |
             | Droidspaces | ${{ inputs.droidspaces }} |
+            | LZ4KD zram | ${{ inputs.lz4kd }} |
             | Built at | ${{ env.TIME_FORM }} |
 
             **Manager downloads:**

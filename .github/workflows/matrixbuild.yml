@@ -8,6 +8,11 @@ on:
         required: true
         type: boolean
         default: true
+      lz4kd:
+        description: "Enable LZ4KD zram compressor (default zram algorithm = lz4kd)"
+        required: true
+        type: boolean
+        default: true
       droidspaces:
         description: "Droidspaces Container Support"
         required: true
@@ -102,6 +107,36 @@ jobs:
           else
             echo "LZ4 patch not compatible with ${{ matrix.rom_source }} source; skipping (stock GKI LZ4 retained)."
           fi
+
+      - name: Apply LZ4KD zram patch
+        if: inputs.lz4kd
+        run: |
+          cd sm8650
+          echo ">>> 正在添加 LZ4KD zram 压缩算法..."
+          patch_file=../patch/lz4kd.patch
+
+          if git apply --check -p1 < "$patch_file" 2>/dev/null; then
+            git apply -p1 < "$patch_file"
+            echo "LZ4KD patch applied cleanly to ${{ matrix.rom_source }}."
+          else
+            echo "git apply 未命中，回退到 patch -F 3（允许上下文 fuzz）..."
+            patch --batch --forward -p1 -F 3 < "$patch_file"
+          fi
+
+          # 完整性校验：任何一个钩子缺失都直接失败，避免静默产出没有 lz4kd 的内核
+          test -f lib/lz4kd/lz4kd_encode.c
+          test -f lib/lz4kd/lz4kd_decode.c
+          test -f include/linux/lz4kd.h
+          test -f crypto/lz4kd.c
+          grep -q 'CONFIG_CRYPTO_LZ4KD' crypto/Kconfig
+          grep -q 'CONFIG_CRYPTO_LZ4KD' crypto/Makefile
+          grep -q 'CONFIG_LZ4KD_COMPRESS' lib/Kconfig
+          grep -q 'CRYPTO_LZ4KD' drivers/block/zram/Kconfig
+          grep -q 'lz4kd' drivers/block/zram/zcomp.c
+
+          # 打开配置：编译进内核，并把 lz4kd 设为 zram 默认压缩算法
+          echo "CONFIG_CRYPTO_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
+          echo "CONFIG_ZRAM_DEF_COMP_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
 
       - name: Apply Droidspaces patches
         if: inputs.droidspaces != 'none' && matrix.rom_source != 'YAAP-17'
@@ -420,6 +455,10 @@ jobs:
           if [[ "${{ inputs.docker }}" == "true" ]]; then
             ZIP_PREFIX="${ZIP_PREFIX}-docker"
           fi
+
+          if [[ "${{ inputs.lz4kd }}" == "true" ]]; then
+            ZIP_PREFIX="${ZIP_PREFIX}-lz4kd"
+          fi
           
           ZIP_NAME="${{ matrix.rom_source }}-${ZIP_PREFIX}-Floran-$(date -u +"%m%d")"
           git clone --depth=1 https://github.com/AkiHaza/AnyKernel3.git
@@ -485,6 +524,7 @@ jobs:
             |    ROM 支持   | YAAP-17, FrierenKernel, Crdroid, LineageOS |
             | Clang | Android 17: [clang-r596125](https://github.com/AkiHaza/Floran-Kernel/releases/download/toolchain-r596125/linux-x86-refs_heads_android17-release-clang-r596125.tar.gz); Android 16: [clang-r563880c](https://github.com/AkiHaza/Floran-Kernel/releases/download/toolchain-r563880c/linux-x86-refs_heads_android16-qpr2-release-clang-r563880c.tar.gz) |
             | KernelSU 方案 |      KernelSU-Next, BakaSU       |
+            | ZRAM 算法 |      ${{ inputs.lz4kd && 'LZ4KD（默认）' || '原厂' }}       |
             |   Build时间   |       ${{ env.TIME_FORM }}        |
 
             **Manager downloads:**
