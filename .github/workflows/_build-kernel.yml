@@ -411,14 +411,22 @@ jobs:
             curl -fLSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s main
 
           elif [[ "${{ inputs.ksu_type }}" == BakaSU* ]]; then
-            curl -fLSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s main
+            # Pinned to d5e9e025 (2026-10-24): newer BakaSU kernels leave
+            # susfs_switch_to_ksu_domain/susfs_restore_creds unused, which fails
+            # the Lineage 23.2 build under -Werror.
+            curl -fLSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s d5e9e025
           fi
 
           if [[ "${{ inputs.ksu_type }}" == "KernelSU-Official-susfs" ]]; then
             bash ../.github/scripts/integrate-susfs.sh source "${{ inputs.ksu_type }}"
           elif [[ "${{ inputs.ksu_type }}" == *susfs ]]; then
             # Apply the original SUSFS gki-android14-6.1 patch from simonpunk.
-            git clone --depth=1 -b gki-android14-6.1 https://gitlab.com/simonpunk/susfs4ksu.git susfs
+            # Pinned to ee155a1a (2026-10-29), the revision that built cleanly
+            # together with BakaSU d5e9e025.
+            git init -q susfs
+            git -C susfs remote add origin https://gitlab.com/simonpunk/susfs4ksu.git
+            git -C susfs fetch -q --depth=1 origin ee155a1ad4219804a7c54cb39dd4fa1b5c2a3fa4
+            git -C susfs checkout -q FETCH_HEAD
             cd susfs
             cp ./kernel_patches/50_add_susfs_in_gki-android14-6.1.patch ..
             cp ./kernel_patches/fs/* ../fs/
