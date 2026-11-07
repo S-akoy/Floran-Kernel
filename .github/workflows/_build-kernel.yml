@@ -208,6 +208,28 @@ jobs:
           echo "CONFIG_CRYPTO_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
           echo "CONFIG_ZRAM_DEF_COMP_LZ4KD=y" >> arch/arm64/configs/gki_defconfig
 
+      - name: Apply FOD brightness patch
+        run: |
+          cd sm8650-modules
+          patch_file=../patch/fod_current_brightness.patch
+          target=qcom/opensource/display-drivers/oplus/oplus_onscreenfingerprint.c
+
+          if [ ! -f "$target" ]; then
+            echo "::warning::oplus FOD driver not found in ${{ inputs.rom_source }}, skipping FOD brightness patch"
+            exit 0
+          fi
+
+          echo ">>> 正在应用 FOD 亮度补丁（用当前系统亮度覆盖指纹 HBM 强制亮度）..."
+          if git apply --check -p1 < "$patch_file" 2>/dev/null; then
+            git apply -p1 < "$patch_file"
+            echo "FOD brightness patch applied cleanly to ${{ inputs.rom_source }}."
+          else
+            echo "::warning::FOD brightness patch did not apply to ${{ inputs.rom_source }}, skipping"
+            exit 0
+          fi
+
+          grep -q 'oplus_ofp_fod_use_current_bl' "$target"
+
       - name: Apply performance patches
         if: inputs.perf_patches
         run: |

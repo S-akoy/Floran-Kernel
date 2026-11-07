@@ -1,0 +1,33 @@
+diff --git a/qcom/opensource/display-drivers/oplus/oplus_onscreenfingerprint.c b/qcom/opensource/display-drivers/oplus/oplus_onscreenfingerprint.c
+index 701d18c..4428565 100644
+--- a/qcom/opensource/display-drivers/oplus/oplus_onscreenfingerprint.c
++++ b/qcom/opensource/display-drivers/oplus/oplus_onscreenfingerprint.c
+@@ -30,6 +30,13 @@
+ #include "dsi_iris_api.h"
+ #endif
+ 
++#include <linux/module.h>
++
++/* FOD brightness: 0 = stock (panel HBM level), 1 = keep the user's backlight level */
++static int oplus_ofp_fod_use_current_bl = 1;
++module_param_named(fod_use_current_bl, oplus_ofp_fod_use_current_bl, int, 0644);
++MODULE_PARM_DESC(fod_use_current_bl, "Use the current backlight level during FOD HBM instead of the panel max HBM level");
++
+ /* -------------------- macro -------------------- */
+ /* fp type bit setting */
+ #define OPLUS_OFP_FP_TYPE_LCD_CAPACITIVE					(BIT(0))
+@@ -963,6 +970,14 @@ static int oplus_ofp_panel_cmd_set_nolock(void *dsi_panel, enum dsi_cmd_set_type
+ 			}
+ 		}
+ #endif /* OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION */
++
++		if (oplus_ofp_fod_use_current_bl) {
++			OFP_INFO("fod: restore backlight %u after hbm on\n", panel->bl_config.bl_level);
++			rc = dsi_panel_set_backlight(panel, panel->bl_config.bl_level);
++			if (rc) {
++				OFP_ERR("failed to restore backlight after hbm on, rc=%d\n", rc);
++			}
++		}
+ 		break;
+ 
+ 	case DSI_CMD_HBM_OFF:
