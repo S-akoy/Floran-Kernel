@@ -411,27 +411,29 @@ jobs:
             curl -fLSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/dev-susfs/kernel/setup.sh" | bash -s main
 
           elif [[ "${{ inputs.ksu_type }}" == BakaSU* ]]; then
-            # Pinned to d5e9e025 (2026-10-24): newer BakaSU kernels leave
-            # susfs_switch_to_ksu_domain/susfs_restore_creds unused, which fails
-            # the Lineage 23.2 build under -Werror.
-            curl -fLSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s d5e9e025
+            curl -fLSs "https://raw.githubusercontent.com/Baka-SU/BakaSU/main/kernel/setup.sh" | bash -s main
           fi
 
           if [[ "${{ inputs.ksu_type }}" == "KernelSU-Official-susfs" ]]; then
             bash ../.github/scripts/integrate-susfs.sh source "${{ inputs.ksu_type }}"
           elif [[ "${{ inputs.ksu_type }}" == *susfs ]]; then
             # Apply the original SUSFS gki-android14-6.1 patch from simonpunk.
-            # Pinned to ee155a1a (2026-10-29), the revision that built cleanly
-            # together with BakaSU d5e9e025.
-            git init -q susfs
-            git -C susfs remote add origin https://gitlab.com/simonpunk/susfs4ksu.git
-            git -C susfs fetch -q --depth=1 origin ee155a1ad4219804a7c54cb39dd4fa1b5c2a3fa4
-            git -C susfs checkout -q FETCH_HEAD
+            git clone --depth=1 -b gki-android14-6.1 https://gitlab.com/simonpunk/susfs4ksu.git susfs
             cd susfs
             cp ./kernel_patches/50_add_susfs_in_gki-android14-6.1.patch ..
             cp ./kernel_patches/fs/* ../fs/
             cp ./kernel_patches/include/linux/* ../include/linux/
             cd ..
+
+            # SUSFS now guards the only callers of these two helpers behind
+            # CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER.  KernelSU forks that do not
+            # declare that symbol (BakaSU) leave the definitions unused, which
+            # trips -Werror.  Mark them as maybe-unused; harmless where the
+            # feature is enabled.
+            if grep -q 'CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER' fs/susfs.c 2>/dev/null; then
+              sed -i 's/^static struct cred \*susfs_switch_to_ksu_domain(void)/static __maybe_unused struct cred *susfs_switch_to_ksu_domain(void)/' fs/susfs.c
+              sed -i 's/^static void susfs_restore_creds(struct cred \*orig_cred)/static __maybe_unused void susfs_restore_creds(struct cred *orig_cred)/' fs/susfs.c
+            fi
 
             # Preserve rejects from optional patches that ran earlier.  The
             # inline repair validates only rejects created by SUSFS.
@@ -699,6 +701,17 @@ jobs:
           cp sm8650/out/arch/arm64/boot/Image AnyKernel3/Image
           cd AnyKernel3
           zip -r9 ../"${ZIP_NAME}.zip" * -x .git
+
+      - name: Make ZRAM LZ4KD module
+        if: inputs.lz4kd
+        run: |
+          ZRAM_NAME="${{ inputs.rom_source }}-A${{ inputs.android_version }}-ZRAM-LZ4KD-16GB-$(date -u +"%m%d")"
+          mkdir -p zram_module_pkg
+          cp -r zram-module/. zram_module_pkg/
+          chmod 755 zram_module_pkg/boot-completed.sh
+          cd zram_module_pkg
+          zip -r9 "../${ZRAM_NAME}.zip" .
+          echo "built ${ZRAM_NAME}.zip"
 
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v6

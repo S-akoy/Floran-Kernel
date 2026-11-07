@@ -1,0 +1,6 @@
+id=zram_lz4kd_8192
+name=ZRAM LZ4KD 16GB
+version=1.2
+versionCode=3
+author=Samshi
+description=At boot: set zram0 to lz4kd with a 16 GiB disksize and vm.swappiness=200. Requires a kernel with CRYPTO_LZ4KD (FrierenKernel LZ4KD build) and KernelSU. v1.2: 16 GiB + max swappiness; v1.1: toybox mkswap/swapon by absolute path.
