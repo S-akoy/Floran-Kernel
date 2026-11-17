@@ -12,6 +12,8 @@ on:
           - DerpFest
           - LineageOS
           - FrierenKernel
+          - Crdroid
+          - AOSPA
 
       ksu_type:
         description: "KernelSU Version"
@@ -26,11 +28,17 @@ on:
           - BakaSU-susfs
           - None
 
-      lz4_enable:
-        description: "Enable lz4 1.10.0 patch"
-        required: true
+      ksu_branch:
+        description: "KernelSU branch (empty = default; BakaSU example: sync-up)"
+        required: false
+        type: string
+        default: ""
+
+      susfs_dev:
+        description: "Use SUSFS android14-6.1 dev branch (off = stable)"
+        required: false
         type: boolean
-        default: true
+        default: false
 
       lz4kd:
         description: "Enable LZ4KD zram compressor (default zram algorithm = lz4kd)"
@@ -101,7 +109,8 @@ jobs:
       android_version: 17
       rom_source: ${{ inputs.rom_source }}
       ksu_type: ${{ inputs.ksu_type }}
-      lz4_enable: ${{ inputs.rom_source != 'YAAP' && inputs.rom_source != 'FrierenKernel' && inputs.lz4_enable }}
+      ksu_branch: ${{ inputs.ksu_branch }}
+      susfs_dev: ${{ inputs.susfs_dev }}
       lz4kd: ${{ inputs.lz4kd }}
       perf_patches: ${{ inputs.perf_patches }}
       fast_alloc: ${{ inputs.fast_alloc }}
