@@ -4,7 +4,7 @@
  	}
  }
  
-+#ifdef CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER
++#if defined(CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER) || defined(CONFIG_KSU_SUSFS_SUS_PATH)
  /*
   * Switches the selinux domain of the current process to the KernelSU one, so
   * that the data paths of the apps can be accessed despite of the selinux
@@ -13,7 +13,7 @@
  	commit_creds(orig_cred);
  }
 +
-+#endif /* CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER */
++#endif /* CONFIG_KSU_SUSFS_PRIORITY_UID_FILTER || CONFIG_KSU_SUSFS_SUS_PATH */
  
  /* sus_path */
  #ifdef CONFIG_KSU_SUSFS_SUS_PATH
